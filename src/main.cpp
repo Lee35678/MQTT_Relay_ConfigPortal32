@@ -21,38 +21,7 @@ String user_config_html = ""
 const float TEMP_THRESHOLD = 30.0; // 온도 임계값
 const float HUMI_THRESHOLD = 70.0; // 습도 임계값
 
-void msgCB(char* topic, byte* payload, unsigned int length) {
-    char msgBuffer[100];
-    int i;
-
-    // MQTT 메시지를 문자열로 변환
-    for(i = 0; i < (int)length; i++) {
-        msgBuffer[i] = payload[i];
-    }
-    msgBuffer[i] = '\0';
-
-    Serial.printf("Received [%s]: %s\n", topic, msgBuffer);
-
-    // 수신된 토픽이 센서 데이터 토픽인지 확인
-    if (strcmp(topic, "id/LeeDH/sensor/data") == 0) {
-        float receivedTemp, receivedHumi;
-        
-        // JSON 형식 데이터 파싱
-        sscanf(msgBuffer, "{\"temperature\":%f,\"humidity\":%f}", &receivedTemp, &receivedHumi);
-        Serial.printf("Parsed Data -> Temp: %.1f, Humi: %.1f\n", receivedTemp, receivedHumi);
-
-        // 온도와 습도 값에 따라 릴레이 제어
-        if (receivedTemp > TEMP_THRESHOLD || receivedHumi > HUMI_THRESHOLD) {
-            digitalWrite(RELAY, HIGH); // 릴레이 ON
-            Serial.println("Relay ON");
-        } else {
-            digitalWrite(RELAY, LOW); // 릴레이 OFF
-            Serial.println("Relay OFF");
-        }
-        
-        pubStatus(); // 상태 전송
-    }
-}
+void msgCB(char* topic, byte* payload, unsigned int length);
 void pubStatus();
 
 void setup() {
@@ -96,6 +65,8 @@ void setup() {
     
     client.subscribe("id/+/relay/cmd");
     digitalWrite(RELAY, LOW);
+
+    client.subscribe("id/LeeDH/sensor/data"); // 토픽 구독 추가
 }
 
 void loop() {
@@ -118,20 +89,24 @@ void pubStatus() {
 }
 
 void msgCB(char* topic, byte* payload, unsigned int length) {
-    char msgBuffer[20];
+    char msgBuffer[100];
     int i;
+
     for(i = 0; i < (int)length; i++) {
         msgBuffer[i] = payload[i];
     }
     msgBuffer[i] = '\0';
-    
-    Serial.printf("\n%s -> %s", topic, msgBuffer);
-    
-    if(!strcmp(msgBuffer, "on")) {
-        digitalWrite(RELAY, HIGH);
-    } else if(!strcmp(msgBuffer, "off")) {
-        digitalWrite(RELAY, LOW);
+
+    if (strcmp(topic, "id/LeeDH/sensor/data") == 0) {
+        float receivedTemp, receivedHumi;
+
+        sscanf(msgBuffer, "{\"temperature\":%f,\"humidity\":%f}", &receivedTemp, &receivedHumi);
+        if (receivedTemp > TEMP_THRESHOLD || receivedHumi > HUMI_THRESHOLD) {
+            digitalWrite(RELAY, HIGH);
+            pubStatus(); // 상태 발행
+        } else {
+            digitalWrite(RELAY, LOW);
+            pubStatus(); // 상태 발행
+        }
     }
-    
-    pubStatus();
 }
